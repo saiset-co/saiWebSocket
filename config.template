@@ -1,0 +1,9 @@
+{
+  Host: "${HOST}",
+  Port: "${PORT}",
+  Origin: "${ORIGIN}",
+  Responseheaders: "${RESPONSE_HEADERS}",
+  AllowUnregisteredClients: "${ALLOW_UNREGISTERED_CLIENTS}",
+  AllowUnregisteredHttpClients: "${ALLOW_UNREGISTERED_HTTP_CLIENTS}",
+  RegisteredTokensUrl: "${REGISTERED_TOKENS_URL}"
+}

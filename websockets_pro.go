@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	//~ "bytes"
 	"io/ioutil"
-	"../github.com/tkanos/gonfig"
+	"github.com/tkanos/gonfig"
 	"github.com/gorilla/websocket"
 	"time"
 )
