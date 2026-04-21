@@ -1,16 +1,24 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"encoding/json"
-	//~ "bytes"
-	"io/ioutil"
-	"github.com/tkanos/gonfig"
-	"github.com/gorilla/websocket"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/tkanos/gonfig"
 )
 
 var clients = make(map[*websocket.Conn]string) // connected clients
@@ -121,6 +129,38 @@ type saiwebsocketconfig struct {
 	RegisteredTokensUrl string
 	Crtfile string
 	Keyfile string
+	AutoTLS string
+}
+
+func generateSelfSignedCert() (tls.Certificate, error) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{Organization: []string{"saiWebSocket"}},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(10 * 365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+	ifaces, _ := net.InterfaceAddrs()
+	for _, addr := range ifaces {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			if ip4 := ipnet.IP.To4(); ip4 != nil {
+				template.IPAddresses = append(template.IPAddresses, ip4)
+			}
+		}
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	return tls.X509KeyPair(certPEM, keyPEM)
 }
 
 var websocketconfig saiwebsocketconfig
@@ -162,22 +202,35 @@ func main() {
 	// Start listening for incoming messages
 	go handleMessages()
 
-	// Start the server 
-	fmt.Println("http server started on "+websocketconfig.Host+":"+websocketconfig.Port)
-	fmt.Println(len(websocketconfig.Crtfile));
-	if len(websocketconfig.Crtfile) > 0  {
-		fmt.Println("Serve wss..");
-		err := http.ListenAndServeTLS(websocketconfig.Host+":"+websocketconfig.Port, websocketconfig.Crtfile, websocketconfig.Keyfile, nil)
+	addr := websocketconfig.Host + ":" + websocketconfig.Port
+	fmt.Println("http server started on " + addr)
+
+	if len(websocketconfig.Crtfile) > 0 {
+		fmt.Println("Serve wss (cert files)..")
+		err := http.ListenAndServeTLS(addr, websocketconfig.Crtfile, websocketconfig.Keyfile, nil)
 		if err != nil {
-			fmt.Println("Listen&Serve tls: ", err)
-		} else {fmt.Println("Listen&Serve ") }
+			fmt.Println("ListenAndServeTLS:", err)
+		}
+	} else if websocketconfig.AutoTLS == "yes" {
+		fmt.Println("Serve wss (auto self-signed)..")
+		cert, err := generateSelfSignedCert()
+		if err != nil {
+			panic(err)
+		}
+		server := &http.Server{
+			Addr:      addr,
+			TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
+		}
+		if err := server.ListenAndServeTLS("", ""); err != nil {
+			fmt.Println("ListenAndServeTLS:", err)
+		}
 	} else {
-		fmt.Println("Serve ws");
-		err := http.ListenAndServe(websocketconfig.Host+":"+websocketconfig.Port, nil)
+		fmt.Println("Serve ws")
+		err := http.ListenAndServe(addr, nil)
 		if err != nil {
-			fmt.Println("Listen&Serve: ", err)
-		} else {fmt.Println("Listen&Serve ") }
-	} //~ https://godoc.org/net/http#ListenAndServeTLS
+			fmt.Println("ListenAndServe:", err)
+		}
+	}
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
