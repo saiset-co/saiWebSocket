@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     ports:
-      - "${EXTERNAL_PORT}:${PORT}"
+      - "${SERVER_EXTERNAL_PORT}:${SERVER_PORT}"
     restart: unless-stopped
     networks:
       - sai-network
