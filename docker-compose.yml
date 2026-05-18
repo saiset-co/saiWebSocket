@@ -1,0 +1,20 @@
+services:
+  saiwebsocket:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: saiwebsocket
+    env_file:
+      - .env
+    ports:
+      - "${SERVER_EXTERNAL_PORT}:${SERVER_PORT}"
+    restart: unless-stopped
+    networks:
+      - sai-network
+    volumes:
+      - ./config.template:/app/config.template
+
+networks:
+  sai-network:
+    name: sai-network
+    driver: bridge
