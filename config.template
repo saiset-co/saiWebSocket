@@ -1,6 +1,6 @@
 {
-  Host: "${HOST}",
-  Port: "${PORT}",
+  Host: "${SERVER_HOST}",
+  Port: "${SERVER_PORT}",
   Origin: "${ORIGIN}",
   Responseheaders: "${RESPONSE_HEADERS}",
   AllowUnregisteredClients: "${ALLOW_UNREGISTERED_CLIENTS}",
